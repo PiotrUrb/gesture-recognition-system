@@ -2,7 +2,8 @@
 Initialize default data in database
 """
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models import Gesture
+from sqlalchemy import select
+from app.models.gesture import Gesture
 import logging
 
 logger = logging.getLogger(__name__)
@@ -110,7 +111,6 @@ async def init_default_gestures(db: AsyncSession):
     """Initialize default gestures in database"""
     try:
         # Check if gestures already exist
-        from sqlalchemy import select
         result = await db.execute(select(Gesture).limit(1))
         existing = result.scalar_one_or_none()
         
