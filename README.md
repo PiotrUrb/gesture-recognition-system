@@ -1,13 +1,13 @@
-# Gesture Recognition System 🤖✋
+# Gesture Recognition System
 
 System rozpoznawania gestów z wykorzystaniem uczenia maszynowego w przemyśle.
 
-## 📋 Opis
+## Opis
 
 Przemysłowy system do rozpoznawania gestów rąk/dłoni na żywo z kamer przemysłowych, 
 z możliwością trenowania własnych gestów i kontroli maszyn.
 
-## 🎯 Funkcjonalności
+## Funkcjonalności
 
 - ✅ Real-time wykrywanie gestów (MediaPipe)
 - ✅ 12 gestów domyślnych (8 statycznych + 4 dynamiczne)
