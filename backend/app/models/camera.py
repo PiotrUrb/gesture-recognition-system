@@ -1,3 +1,5 @@
+# backend/app/models/camera.py
+
 """
 Camera database model
 """

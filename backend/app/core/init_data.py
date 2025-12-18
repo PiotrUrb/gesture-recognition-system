@@ -1,3 +1,6 @@
+# backend/app/core/init_data.py
+
+
 """
 Initialize default data in database
 """

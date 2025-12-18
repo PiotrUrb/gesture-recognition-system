@@ -1,3 +1,5 @@
+# backend/app/core/database.py
+
 """
 Database configuration and session management
 """

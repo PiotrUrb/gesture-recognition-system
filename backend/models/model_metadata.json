@@ -1,0 +1,17 @@
+{
+  "accuracy": 0.9939759036144579,
+  "num_classes": 8,
+  "classes": [
+    "fist",
+    "five_fingers",
+    "four_fingers",
+    "ok_sign",
+    "one_finger",
+    "open_hand",
+    "three_fingers",
+    "two_fingers"
+  ],
+  "model_type": "RandomForestClassifier",
+  "num_estimators": 100,
+  "feature_dim": 83
+}

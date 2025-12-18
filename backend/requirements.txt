@@ -30,3 +30,8 @@ python-socketio==5.10.0
 pytest==7.4.3
 pytest-asyncio==0.21.1
 httpx==0.25.2
+
+
+psutil==5.9.6
+aiohttp==3.9.1
+websockets==12.0

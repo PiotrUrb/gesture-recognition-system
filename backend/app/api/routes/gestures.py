@@ -1,7 +1,10 @@
+# backend/app/api/routes/gestures.py
+
 """
 Gesture management routes
 """
 from fastapi import APIRouter
+from app.services.gesture_controller import gesture_controller
 
 router = APIRouter(prefix="/gestures", tags=["gestures"])
 
@@ -35,3 +38,8 @@ async def get_default_gestures():
         "gestures": default_gestures,
         "count": len(default_gestures)
     }
+
+@router.get("/logs")
+async def get_action_logs():
+    """Get recent action logs"""
+    return gesture_controller.get_logs()

@@ -1,3 +1,5 @@
+# backend/tests/test_camera_manager.py
+
 """
 Test Camera Manager
 """
