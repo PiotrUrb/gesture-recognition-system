@@ -509,13 +509,13 @@ const CollectionMode = ({ gesture, onBack }: any) => {
       </div>
 
       {/* Camera Feed */}
-      <div className="flex-1 bg-black rounded-xl border border-gray-700 relative overflow-hidden flex items-center justify-center group min-h-0 mb-4">
+      <div className="w-full max-w-3xl h-80 bg-black rounded-xl border border-gray-700 relative overflow-hidden flex items-center justify-center mb-4">
         <img src="http://localhost:8000/api/v1/cameras/0/stream" className="w-full h-full object-cover opacity-80" alt="Camera" />
         
         {/* Overlay */}
         <div className={`absolute inset-0 pointer-events-none flex flex-col justify-between p-4 lg:p-6 border-4 transition-colors ${
           isRecording ? 'border-red-500' : 'border-blue-500/30'
-        }`}>
+       }`}>
           <div className="flex justify-between">
             <span className={`text-xs px-2 py-1 rounded font-bold animate-pulse ${
               isRecording ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-400'

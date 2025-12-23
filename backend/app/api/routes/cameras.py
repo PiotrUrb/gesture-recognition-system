@@ -1,253 +1,268 @@
 """
-POPRAWKA #1: Backend - app/api/routes/cameras.py
-ZMIANA: Parametry muszą być w body JSON, nie w query parameters
+Camera management routes - FINAL WORKING VERSION
 """
-
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Query
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import cv2
 import asyncio
-import logging
+
 from app.services.camera_manager import camera_manager
 from app.services.hand_detector import hand_detector
+from app.services.feature_processor import feature_processor
+from app.services.gesture_recognizer import gesture_recognizer
+from app.services.gesture_controller import gesture_controller
 
-logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/cameras", tags=["cameras"])
 
+
 # ============================================================================
-# REQUEST MODELS
+# PYDANTIC MODELS
 # ============================================================================
+
+class CameraSettings(BaseModel):
+    """Settings for camera image adjustment"""
+    brightness: int = 50
+    contrast: int = 50
+    saturation: int = 50
+
 
 class AddCameraRequest(BaseModel):
+    """Request model for adding a new camera"""
+    name: str
     source: str
-    camera_type: str = "usb"
-    name: str = None
+    type: str
 
-class UpdateSettingsRequest(BaseModel):
-    brightness: float = None
-    contrast: float = None
-    saturation: float = None
-    name: str = None
-    fps: int = None
-    width: int = None
-    height: int = None
+
+class ModeRequest(BaseModel):
+    """Request model for setting detection mode"""
+    mode: str
+
 
 # ============================================================================
-# VIDEO STREAMING ENDPOINTS
-# ============================================================================
-
-@router.get("/{camera_id}/stream")
-async def stream_camera(camera_id: int, quality: str = Query("medium", regex="^(low|medium|high)$")):
-    """Stream video from camera with quality optimization"""
-    quality_map = {
-        "low": (640, 480),
-        "medium": (1024, 768),
-        "high": (1920, 1080)
-    }
-    
-    width, height = quality_map[quality]
-    
-    async def generate_frames():
-        """Generate optimized video frames"""
-        while True:
-            try:
-                frame = camera_manager.get_frame(camera_id)
-                if frame is None:
-                    await asyncio.sleep(0.01)
-                    continue
-                
-                resized_frame = cv2.resize(frame, (width, height))
-                _, buffer = cv2.imencode('.jpg', resized_frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
-                
-                yield (
-                    b'--frame\r\n'
-                    b'Content-Type: image/jpeg\r\n'
-                    b'Content-Length: ' + str(len(buffer)).encode() + b'\r\n\r\n'
-                    + buffer.tobytes() + b'\r\n'
-                )
-                
-                await asyncio.sleep(0.03)
-            except Exception as e:
-                logger.error(f"Stream error for camera {camera_id}: {e}")
-                break
-    
-    return StreamingResponse(
-        generate_frames(),
-        media_type="multipart/x-mixed-replace; boundary=frame",
-        headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
-    )
-
-# ============================================================================
-# WEBSOCKET DETECTION ENDPOINT - FIXED
-# ============================================================================
-
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: dict[int, list[WebSocket]] = {}
-    
-    async def connect(self, camera_id: int, websocket: WebSocket):
-        await websocket.accept()
-        if camera_id not in self.active_connections:
-            self.active_connections[camera_id] = []
-        self.active_connections[camera_id].append(websocket)
-        logger.info(f"✅ Client connected to camera {camera_id}")
-    
-    def disconnect(self, camera_id: int, websocket: WebSocket):
-        if camera_id in self.active_connections:
-            self.active_connections[camera_id].remove(websocket)
-    
-    async def broadcast(self, camera_id: int, data: dict):
-        if camera_id in self.active_connections:
-            disconnected = []
-            for connection in self.active_connections[camera_id]:
-                try:
-                    await connection.send_json(data)
-                except Exception as e:
-                    logger.debug(f"Broadcast error: {e}")
-                    disconnected.append(connection)
-            
-            for conn in disconnected:
-                self.disconnect(camera_id, conn)
-
-manager = ConnectionManager()
-
-@router.websocket("/ws/{camera_id}/detection")
-async def detection_websocket(websocket: WebSocket, camera_id: int):
-    """WebSocket for real-time gesture detection"""
-    await manager.connect(camera_id, websocket)
-    detection_interval = 0
-    
-    try:
-        while True:
-            frame = camera_manager.get_frame(camera_id)
-            if frame is None:
-                await asyncio.sleep(0.01)
-                continue
-            
-            # ✅ FIX: Run hand_detector in thread pool (non-blocking)
-            rgb_frame, results = await asyncio.to_thread(
-                hand_detector.detect_hands, frame
-            )
-            
-            hands_info = hand_detector.get_hand_info(results)
-            
-            detection_interval += 1
-            if detection_interval % 5 == 0:
-                if hands_info:
-                    for hand in hands_info:
-                        data = {
-                            "gesture": "hand_detected",
-                            "confidence": hand.get("confidence", 0.85),
-                            "hand_type": hand.get("type", "Unknown"),
-                            "timestamp": int(cv2.getTickCount() / cv2.getTickFrequency() * 1000)
-                        }
-                        await manager.broadcast(camera_id, data)
-                
-                detection_interval = 0
-            
-            await asyncio.sleep(0.01)
-    
-    except WebSocketDisconnect:
-        manager.disconnect(camera_id, websocket)
-        logger.info(f"Client disconnected from camera {camera_id}")
-    except Exception as e:
-        logger.error(f"WebSocket error for camera {camera_id}: {e}")
-        manager.disconnect(camera_id, websocket)
-
-# ============================================================================
-# CAMERA MANAGEMENT ENDPOINTS - FIXED WITH PYDANTIC MODELS
+# GET ENDPOINTS
 # ============================================================================
 
 @router.get("/")
 async def list_cameras():
     """List all cameras"""
-    cameras_list = camera_manager.list_cameras()
+    cameras = camera_manager.list_cameras()
+    print(f"📹 Listing {len(cameras)} cameras")
     return {
-        "cameras": cameras_list,
-        "count": len(cameras_list)
+        "cameras": cameras,
+        "count": len(cameras),
+        "message": "Active cameras listed"
     }
 
-@router.get("/{camera_id}")
-async def get_camera(camera_id: int):
-    """Get camera details"""
+
+@router.get("/detect")
+async def detect_cameras():
+    """Detect available USB cameras"""
+    available = camera_manager.detect_usb_cameras()
+    print(f"🔍 Detected {len(available)} USB cameras")
+    return {
+        "detected": available,
+        "count": len(available),
+        "message": f"Detected {len(available)} cameras"
+    }
+
+
+@router.get("/{camera_id}/info")
+async def get_camera_info(camera_id: int):
+    """Get detailed camera information"""
     info = camera_manager.get_camera_info(camera_id)
-    if not info:
+    
+    if info is None:
         raise HTTPException(status_code=404, detail="Camera not found")
+    
     return info
+
+
+@router.get("/{camera_id}/stream")
+async def video_stream(camera_id: int):
+    """Stream video from camera"""
+    print(f"📹 Starting stream for camera {camera_id}")
+    return StreamingResponse(
+        generate_frames(camera_id),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )
+
+
+# ============================================================================
+# POST ENDPOINTS
+# ============================================================================
 
 @router.post("/")
 async def add_camera(request: AddCameraRequest):
-    """Add a new camera - accepts JSON body"""
+    """Add a new camera"""
     try:
-        existing_ids = list(camera_manager.cameras.keys())
-        camera_id = max(existing_ids) + 1 if existing_ids else 0
+        # Determine camera ID based on type
+        if request.type == 'usb':
+            camera_id = int(request.source)
+        else:
+            camera_id = len(camera_manager.cameras)
         
-        success = camera_manager.add_camera(camera_id, request.source, request.camera_type)
-        if not success:
-            raise HTTPException(status_code=400, detail="Failed to open camera")
+        # Add camera to manager
+        success = camera_manager.add_camera(camera_id, request.source, request.type)
         
-        if request.name:
-            camera_manager.camera_configs[camera_id]['name'] = request.name
+        print(f"➕ Adding camera: id={camera_id}, type={request.type}, source={request.source}, success={success}")
         
-        logger.info(f"✅ Camera {camera_id} added: {request.camera_type} from {request.source}")
         return {
-            "status": "success",
-            "camera_id": camera_id,
-            "message": f"Camera {request.name or camera_id} added"
+            "id": camera_id,
+            "name": request.name,
+            "source": request.source,
+            "type": request.type,
+            "enabled": success,
+            "message": "Camera added successfully" if success else "Failed to add camera"
         }
     except Exception as e:
-        logger.error(f"Error adding camera: {e}")
+        print(f"❌ Error adding camera: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @router.post("/{camera_id}/settings")
-async def update_camera_settings(camera_id: int, request: UpdateSettingsRequest):
-    """Update camera settings"""
+async def update_camera_settings(camera_id: int, settings: CameraSettings):
+    """Update camera image settings (brightness, contrast, saturation)"""
+    success = camera_manager.update_settings(camera_id, settings.dict())
     
-    info = camera_manager.get_camera_info(camera_id)
-    if not info:
-        raise HTTPException(status_code=404, detail="Camera not found")
+    if not success:
+        print(f"❌ Failed to update settings for camera {camera_id}")
+        raise HTTPException(status_code=404, detail="Camera not active")
     
-    try:
-        # Update image adjustments
-        settings_dict = {}
-        if request.brightness is not None:
-            settings_dict['brightness'] = request.brightness
-        if request.contrast is not None:
-            settings_dict['contrast'] = request.contrast
-        if request.saturation is not None:
-            settings_dict['saturation'] = request.saturation
-        
-        if settings_dict:
-            camera_manager.update_settings(camera_id, settings_dict)
-            logger.info(f"✅ Updated image settings for camera {camera_id}: {settings_dict}")
-        
-        # Update resolution/fps
-        if request.width or request.height or request.fps:
-            camera_manager.configure_camera(camera_id, request.width, request.height, request.fps)
-        
-        if request.name:
-            camera_manager.camera_configs[camera_id]['name'] = request.name
-        
-        return {
-            "status": "success",
-            "camera_id": camera_id,
-            "message": "Settings updated"
-        }
-    except Exception as e:
-        logger.error(f"Error updating settings for camera {camera_id}: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+    print(f"⚙️ Updated settings for camera {camera_id}: {settings.dict()}")
+    return {
+        "status": "updated",
+        "camera_id": camera_id,
+        "settings": settings.dict()
+    }
+
+
+@router.post("/mode")
+async def set_mode(request: ModeRequest):
+    """Set detection mode (standard, safe, all)"""
+    print(f"🔄 Setting mode to: {request.mode}")
+    success = gesture_controller.set_mode(request.mode)
+    print(f"✅ Mode set to: {gesture_controller.mode}")
+    return {
+        "success": success,
+        "mode": gesture_controller.mode
+    }
+
+
+# ============================================================================
+# DELETE ENDPOINTS
+# ============================================================================
 
 @router.delete("/{camera_id}")
 async def remove_camera(camera_id: int):
     """Remove a camera"""
+    success = camera_manager.remove_camera(camera_id)
+    
+    if success:
+        print(f"🗑️ Camera {camera_id} removed")
+        return {"status": "removed", "camera_id": camera_id}
+    else:
+        print(f"❌ Camera {camera_id} not found")
+        raise HTTPException(status_code=404, detail="Camera not found")
+
+
+# ============================================================================
+# WEBSOCKET ENDPOINTS
+# ============================================================================
+
+@router.websocket("/{camera_id}/ws/detection")
+async def detection_websocket(websocket: WebSocket, camera_id: int):
+    """WebSocket for real-time gesture detection"""
+    await websocket.accept()
+    print(f"🔌 WebSocket connected for camera {camera_id}")
+    
     try:
-        success = camera_manager.remove_camera(camera_id)
-        if not success:
-            raise HTTPException(status_code=404, detail="Camera not found")
-        
-        logger.info(f"✅ Camera {camera_id} removed")
-        return {"status": "success", "message": f"Camera {camera_id} removed"}
+        while True:
+            # Get frame from camera
+            frame = camera_manager.get_frame(camera_id)
+            
+            if frame is None:
+                await asyncio.sleep(0.01)
+                continue
+
+            # 1. Detect hands
+            rgb_frame, results = hand_detector.detect_hands(frame)
+            hands_info = hand_detector.get_hand_info(results)
+            landmarks_list = hand_detector.extract_landmarks(results)
+            
+            detection_data = {
+                "timestamp": cv2.getTickCount(),
+                "hands_detected": len(hands_info),
+                "gestures": [],
+                "controller": None
+            }
+
+            # 2. Process gestures if hands detected
+            if hands_info and landmarks_list:
+                for i, hand in enumerate(hands_info):
+                    label = "Unknown"
+                    confidence = 0.0
+                    
+                    try:
+                        # Extract features from landmarks
+                        landmarks = landmarks_list[i]
+                        features = feature_processor.extract_features(landmarks)
+                        
+                        # Predict gesture using ML model
+                        label, confidence = gesture_recognizer.predict(features)
+                        
+                        print(f"🎯 Hand {i} detected: {label} (confidence: {confidence:.2f})")
+                        
+                        # Process controller logic (only for first hand)
+                        if i == 0:
+                            controller_result = gesture_controller.process_gesture(label, confidence)
+                            detection_data["controller"] = {
+                                "mode": gesture_controller.mode,
+                                "triggered": controller_result["action_triggered"],
+                                "progress": controller_result["progress"],
+                                "message": controller_result["message"]
+                            }
+                            
+                            # Log high-confidence gestures
+                            if confidence >= 0.5:
+                                print(f"✅ Gesture recognized: {label} (conf: {confidence:.2f})")
+                        
+                    except Exception as e:
+                        print(f"❌ Prediction error: {e}")
+
+                    # Add gesture info to response
+                    detection_data["gestures"].append({
+                        "type": hand["type"],
+                        "label": label,
+                        "confidence": confidence
+                    })
+
+            # Send detection data via WebSocket
+            await websocket.send_json(detection_data)
+            await asyncio.sleep(0.05)  # ~20 FPS
+
+    except WebSocketDisconnect:
+        print(f"❌ WebSocket disconnected for camera {camera_id}")
     except Exception as e:
-        logger.error(f"Error removing camera {camera_id}: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        print(f"❌ WebSocket error: {e}")
+        await websocket.close()
+
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+def generate_frames(camera_id: int):
+    """Generate video frames for streaming"""
+    while True:
+        frame = camera_manager.get_frame(camera_id)
+        if frame is None:
+            break
+        
+        ret, buffer = cv2.imencode('.jpg', frame)
+        if not ret:
+            continue
+            
+        frame_bytes = buffer.tobytes()
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
