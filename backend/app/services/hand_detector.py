@@ -37,11 +37,13 @@ class HandDetector:
         self.mp_drawing_styles = mp.solutions.drawing_styles
         
         self.hands = self.mp_hands.Hands(
-            static_image_mode=static_image_mode,
+            static_image_mode=False,
             max_num_hands=max_num_hands,
             min_detection_confidence=min_detection_confidence,
-            min_tracking_confidence=min_tracking_confidence
+            min_tracking_confidence=0.3,
+            model_complexity=0
         )
+
         
         logger.info(f"HandDetector initialized: max_hands={max_num_hands}, "
                    f"detection_conf={min_detection_confidence}, "

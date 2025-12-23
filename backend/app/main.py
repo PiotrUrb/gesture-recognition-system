@@ -7,6 +7,7 @@ from app.core.database import init_db, async_session_maker
 from app.core.init_data import init_default_gestures
 from app.services.camera_manager import camera_manager
 
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'

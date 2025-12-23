@@ -6,6 +6,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import cv2
 import asyncio
+import logging
 
 from app.services.camera_manager import camera_manager
 from app.services.hand_detector import hand_detector
@@ -13,7 +14,10 @@ from app.services.feature_processor import feature_processor
 from app.services.gesture_recognizer import gesture_recognizer
 from app.services.gesture_controller import gesture_controller
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/cameras", tags=["cameras"])
+
 
 
 # ============================================================================
@@ -172,80 +176,103 @@ async def remove_camera(camera_id: int):
 
 @router.websocket("/{camera_id}/ws/detection")
 async def detection_websocket(websocket: WebSocket, camera_id: int):
-    """WebSocket for real-time gesture detection"""
+    """WebSocket for real-time gesture detection - OPTIMIZED"""
     await websocket.accept()
     print(f"🔌 WebSocket connected for camera {camera_id}")
+    logger.info(f"WebSocket connected for camera {camera_id}")
+    
+    frame_counter = 0
     
     try:
         while True:
-            # Get frame from camera
-            frame = camera_manager.get_frame(camera_id)
-            
-            if frame is None:
-                await asyncio.sleep(0.01)
-                continue
+            try:
+                # OPTYMALIZACJA: Przetwarzaj co 3 frame (oszczędność CPU)
+                frame_counter += 1
+                if frame_counter % 3 != 0:
+                    await asyncio.sleep(0.01)
+                    continue
+                
+                # Get frame from camera
+                frame = camera_manager.get_frame(camera_id)
+                
+                if frame is None:
+                    await asyncio.sleep(0.01)
+                    continue
 
-            # 1. Detect hands
-            rgb_frame, results = hand_detector.detect_hands(frame)
-            hands_info = hand_detector.get_hand_info(results)
-            landmarks_list = hand_detector.extract_landmarks(results)
-            
-            detection_data = {
-                "timestamp": cv2.getTickCount(),
-                "hands_detected": len(hands_info),
-                "gestures": [],
-                "controller": None
-            }
+                # 1. Detect hands
+                rgb_frame, results = hand_detector.detect_hands(frame)
+                hands_info = hand_detector.get_hand_info(results)
+                landmarks_list = hand_detector.extract_landmarks(results)
+                
+                detection_data = {
+                    "timestamp": cv2.getTickCount(),
+                    "hands_detected": len(hands_info),
+                    "gestures": [],
+                    "controller": None
+                }
 
-            # 2. Process gestures if hands detected
-            if hands_info and landmarks_list:
-                for i, hand in enumerate(hands_info):
-                    label = "Unknown"
-                    confidence = 0.0
-                    
-                    try:
-                        # Extract features from landmarks
-                        landmarks = landmarks_list[i]
-                        features = feature_processor.extract_features(landmarks)
+                # 2. Process gestures if hands detected
+                if hands_info and landmarks_list:
+                    for i, hand in enumerate(hands_info):
+                        label = "Unknown"
+                        confidence = 0.0
                         
-                        # Predict gesture using ML model
-                        label, confidence = gesture_recognizer.predict(features)
-                        
-                        print(f"🎯 Hand {i} detected: {label} (confidence: {confidence:.2f})")
-                        
-                        # Process controller logic (only for first hand)
-                        if i == 0:
-                            controller_result = gesture_controller.process_gesture(label, confidence)
-                            detection_data["controller"] = {
-                                "mode": gesture_controller.mode,
-                                "triggered": controller_result["action_triggered"],
-                                "progress": controller_result["progress"],
-                                "message": controller_result["message"]
-                            }
+                        try:
+                            # Extract features from landmarks
+                            landmarks = landmarks_list[i]
+                            features = feature_processor.extract_features(landmarks)
                             
-                            # Log high-confidence gestures
-                            if confidence >= 0.5:
-                                print(f"✅ Gesture recognized: {label} (conf: {confidence:.2f})")
-                        
-                    except Exception as e:
-                        print(f"❌ Prediction error: {e}")
+                            # Predict gesture using ML model
+                            label, confidence = gesture_recognizer.predict(features)
+                            
+                            # Process controller logic (only for first hand)
+                            if i == 0:
+                                controller_result = gesture_controller.process_gesture(label, confidence)
+                                detection_data["controller"] = {
+                                    "mode": gesture_controller.mode,
+                                    "triggered": controller_result["action_triggered"],
+                                    "progress": controller_result["progress"],
+                                    "message": controller_result["message"]
+                                }
+                                
+                                # Log tylko ważne eventy
+                                if confidence >= 0.7 and frame_counter % 60 == 0:
+                                    print(f"✅ {label} ({confidence:.2f})")
+                            
+                        except Exception as e:
+                            if frame_counter % 100 == 0:
+                                logger.error(f"Prediction error: {e}")
 
-                    # Add gesture info to response
-                    detection_data["gestures"].append({
-                        "type": hand["type"],
-                        "label": label,
-                        "confidence": confidence
-                    })
+                        # Add gesture info to response
+                        detection_data["gestures"].append({
+                            "type": hand["type"],
+                            "label": label,
+                            "confidence": confidence
+                        })
 
-            # Send detection data via WebSocket
-            await websocket.send_json(detection_data)
-            await asyncio.sleep(0.05)  # ~20 FPS
+                # Send detection data via WebSocket
+                try:
+                    await websocket.send_json(detection_data)
+                except Exception as ws_send_error:
+                    logger.warning(f"WebSocket send error: {ws_send_error}")
+                    break
+                    
+                # OPTYMALIZACJA: Krótszy sleep = szybsza reakcja
+                await asyncio.sleep(0.01)  # ~30 FPS
+                
+            except Exception as inner_error:
+                logger.error(f"Inner loop error: {inner_error}")
+                break
 
     except WebSocketDisconnect:
         print(f"❌ WebSocket disconnected for camera {camera_id}")
     except Exception as e:
         print(f"❌ WebSocket error: {e}")
-        await websocket.close()
+        try:
+            await websocket.close(code=1011, reason="Internal server error")
+        except:
+            pass
+
 
 
 # ============================================================================
@@ -253,16 +280,47 @@ async def detection_websocket(websocket: WebSocket, camera_id: int):
 # ============================================================================
 
 def generate_frames(camera_id: int):
-    """Generate video frames for streaming"""
+    """Generate video frames for streaming - ULTRA OPTIMIZED"""
+    import time
+    
+    last_frame_time = time.time()
+    target_fps = 30  # Docelowe FPS
+    frame_interval = 1.0 / target_fps
+    
     while True:
-        frame = camera_manager.get_frame(camera_id)
-        if frame is None:
-            break
-        
-        ret, buffer = cv2.imencode('.jpg', frame)
-        if not ret:
-            continue
+        try:
+            current_time = time.time()
             
-        frame_bytes = buffer.tobytes()
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+            # Rate limiting - nie wysyłaj częściej niż 30 FPS
+            if current_time - last_frame_time < frame_interval:
+                continue
+            
+            frame = camera_manager.get_frame(camera_id)
+            if frame is None:
+                break
+            
+            # OPTYMALIZACJA: Encode z niższą jakością ale szybko
+            encode_params = [
+                cv2.IMWRITE_JPEG_QUALITY, 75,
+                cv2.IMWRITE_JPEG_PROGRESSIVE, 1,
+                cv2.IMWRITE_JPEG_OPTIMIZE, 1
+            ]
+            
+            ret, buffer = cv2.imencode('.jpg', frame, encode_params)
+            if not ret:
+                continue
+            
+            frame_bytes = buffer.tobytes()
+            
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n'
+                   b'Cache-Control: no-cache\r\n'
+                   b'\r\n' + frame_bytes + b'\r\n')
+            
+            last_frame_time = current_time
+            
+        except Exception as e:
+            logger.error(f"Frame generation error: {e}")
+            break
+
+

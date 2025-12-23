@@ -4,7 +4,7 @@ Handles multiple camera sources (USB, IP, File)
 with extended settings support for UI sliders.
 """
 
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Union
 
 import cv2
 import numpy as np
@@ -20,6 +20,7 @@ class CameraManager:
         self.cameras: Dict[int, cv2.VideoCapture] = {}
         self.camera_configs: Dict[int, dict] = {}
         self.camera_settings: Dict[int, dict] = {}
+        self.active_cameras: List[dict] = []
 
     # ---------- discovery ----------
 
@@ -49,61 +50,78 @@ class CameraManager:
         return available_cameras
 
     # ---------- lifecycle ----------
-
-    def add_camera(
-        self,
-        camera_id: int,
-        source: str,
-        camera_type: str = "usb",
-        resolution: tuple[int, int] = (640, 480),
-        fps: int = 30,
-    ) -> bool:
-        """Add a camera source"""
+    
+    def add_camera(self, camera_id: int, source: Union[int, str], camera_type: str = 'usb') -> bool:
+        """Add a new camera with optimized settings"""
         try:
-            logger.info(f"Adding camera {camera_id}: type={camera_type}, source={source}")
-
-            if camera_type == "usb":
-                cap = cv2.VideoCapture(int(source))
-            elif camera_type in {"ip", "file"}:
-                cap = cv2.VideoCapture(source)
-            else:
-                logger.error(f"Unknown camera type: {camera_type}")
+            if camera_id in self.cameras:
+                logger.warning(f"Camera {camera_id} already exists")
                 return False
 
+            logger.info(f"Adding camera {camera_id}: type={camera_type}, source={source}")
+            
+            # Convert source based on camera type
+            if camera_type == 'usb':
+                try:
+                    source_int = int(source)
+                except ValueError:
+                    logger.error(f"Invalid USB camera source: {source}")
+                    return False
+                
+                # OPTYMALIZACJA: Użyj DirectShow na Windows (szybszy)
+                cap = cv2.VideoCapture(source_int, cv2.CAP_DSHOW)
+            else:
+                cap = cv2.VideoCapture(source)
+            
             if not cap.isOpened():
                 logger.error(f"Failed to open camera {camera_id}")
                 return False
-
-            width, height = resolution
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-            cap.set(cv2.CAP_PROP_FPS, fps)
-
+            
+            # OPTYMALIZACJA: Ustaw rozdzielczość na 640x480
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            
+            # OPTYMALIZACJA: Ustaw FPS na 30
+            cap.set(cv2.CAP_PROP_FPS, 30)
+            
+            # OPTYMALIZACJA: Wyłącz auto-focus (jeśli wspierane)
+            cap.set(cv2.CAP_PROP_AUTOFOCUS, 0)
+            
+            # OPTYMALIZACJA: Ustaw buffer na 1 (najnowszy frame)
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            
+            # Get actual properties
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            fps = int(cap.get(cv2.CAP_PROP_FPS))
+            
             self.cameras[camera_id] = cap
+
+            # Store config
             self.camera_configs[camera_id] = {
-                "source": source,
-                "type": camera_type,
-                "resolution": resolution,
-                "fps": fps,
-                "name": f"Camera {camera_id}",
+                'name': f'Camera {camera_id}',
+                'source': source,
+                'type': camera_type,
+                'resolution': (width, height),
+                'fps': fps
             }
 
-            # settings na skali 0‑200 – pod UI
+            # Initialize default settings
             self.camera_settings[camera_id] = {
-                "brightness": 100,
-                "contrast": 100,
-                "saturation": 100,
-                "gamma": 100,
-                "hue": 0,
-                "blur": 0,
-                "exposure": 100,
-            }
-
+                'brightness': 50,
+                'contrast': 50,
+                'saturation': 50
+}
             logger.info(f"✅ Camera {camera_id} added successfully")
+            logger.info(f"   Resolution: {width}x{height}")
+            logger.info(f"   FPS: {fps}")
+            
             return True
+            
         except Exception as e:
-            logger.error(f"Error adding camera {camera_id}: {e}", exc_info=True)
+            logger.error(f"Error adding camera {camera_id}: {e}")
             return False
+
 
     def remove_camera(self, camera_id: int) -> bool:
         """Remove a camera"""
