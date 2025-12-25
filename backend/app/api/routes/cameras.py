@@ -1,5 +1,5 @@
 """
-Camera management routes - FINAL WORKING VERSION
+Camera management routes - FINAL WORKING VERSION WITH DATABASE LOGGING
 """
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
@@ -14,11 +14,12 @@ from app.services.feature_processor import feature_processor
 from app.services.gesture_recognizer import gesture_recognizer
 from app.services.gesture_controller import gesture_controller
 
+# 🔥 IMPORT: Gesture Logging
+from app.services.gesture_logger_utility import log_gesture_event
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/cameras", tags=["cameras"])
-
-
 
 # ============================================================================
 # PYDANTIC MODELS
@@ -30,18 +31,15 @@ class CameraSettings(BaseModel):
     contrast: int = 50
     saturation: int = 50
 
-
 class AddCameraRequest(BaseModel):
     """Request model for adding a new camera"""
     name: str
     source: str
     type: str
 
-
 class ModeRequest(BaseModel):
     """Request model for setting detection mode"""
     mode: str
-
 
 # ============================================================================
 # GET ENDPOINTS
@@ -58,7 +56,6 @@ async def list_cameras():
         "message": "Active cameras listed"
     }
 
-
 @router.get("/detect")
 async def detect_cameras():
     """Detect available USB cameras"""
@@ -70,7 +67,6 @@ async def detect_cameras():
         "message": f"Detected {len(available)} cameras"
     }
 
-
 @router.get("/{camera_id}/info")
 async def get_camera_info(camera_id: int):
     """Get detailed camera information"""
@@ -81,7 +77,6 @@ async def get_camera_info(camera_id: int):
     
     return info
 
-
 @router.get("/{camera_id}/stream")
 async def video_stream(camera_id: int):
     """Stream video from camera"""
@@ -90,7 +85,6 @@ async def video_stream(camera_id: int):
         generate_frames(camera_id),
         media_type="multipart/x-mixed-replace; boundary=frame"
     )
-
 
 # ============================================================================
 # POST ENDPOINTS
@@ -123,7 +117,6 @@ async def add_camera(request: AddCameraRequest):
         print(f"❌ Error adding camera: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
-
 @router.post("/{camera_id}/settings")
 async def update_camera_settings(camera_id: int, settings: CameraSettings):
     """Update camera image settings (brightness, contrast, saturation)"""
@@ -140,7 +133,6 @@ async def update_camera_settings(camera_id: int, settings: CameraSettings):
         "settings": settings.dict()
     }
 
-
 @router.post("/mode")
 async def set_mode(request: ModeRequest):
     """Set detection mode (standard, safe, all)"""
@@ -151,7 +143,6 @@ async def set_mode(request: ModeRequest):
         "success": success,
         "mode": gesture_controller.mode
     }
-
 
 # ============================================================================
 # DELETE ENDPOINTS
@@ -168,7 +159,6 @@ async def remove_camera(camera_id: int):
     else:
         print(f"❌ Camera {camera_id} not found")
         raise HTTPException(status_code=404, detail="Camera not found")
-
 
 # ============================================================================
 # WEBSOCKET ENDPOINTS
@@ -235,6 +225,22 @@ async def detection_websocket(websocket: WebSocket, camera_id: int):
                                     "message": controller_result["message"]
                                 }
                                 
+                                # 🔥 LOG TO DATABASE (confidence >= 0.7)
+                                if confidence >= 0.7:
+                                    log_gesture_event(
+                                        gesture=label,
+                                        confidence=confidence,
+                                        hand_type=hand["type"],
+                                        mode=gesture_controller.mode,
+                                        success=True,
+                                        message=controller_result.get("message", ""),
+                                        camera_id=camera_id,
+                                        camera_name=f"Camera {camera_id}",
+                                        action_triggered=controller_result.get("action"),
+                                        progress=controller_result.get("progress", 0),
+                                        gesture_label=label,
+                                    )
+                                
                                 # Log tylko ważne eventy
                                 if confidence >= 0.7 and frame_counter % 60 == 0:
                                     print(f"✅ {label} ({confidence:.2f})")
@@ -272,8 +278,6 @@ async def detection_websocket(websocket: WebSocket, camera_id: int):
             await websocket.close(code=1011, reason="Internal server error")
         except:
             pass
-
-
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -322,5 +326,3 @@ def generate_frames(camera_id: int):
         except Exception as e:
             logger.error(f"Frame generation error: {e}")
             break
-
-

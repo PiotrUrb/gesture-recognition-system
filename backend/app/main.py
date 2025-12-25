@@ -1,12 +1,16 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+import asyncio
 import logging
+import sys
+import os
+from datetime import datetime, timedelta
+
 from app.core.config import settings
 from app.core.database import init_db, async_session_maker
 from app.core.init_data import init_default_gestures
 from app.services.camera_manager import camera_manager
-
 
 logging.basicConfig(
     level=logging.INFO,
@@ -15,17 +19,74 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+# ============================================================================
+# IMPORTS - Gesture Detection Logging
+# ============================================================================
+
+try:
+    from app.services.gesture_detection_logging import init_logging_service, get_logging_service
+    HAS_LOGGING_SERVICE = True
+except ImportError:
+    HAS_LOGGING_SERVICE = False
+    logger.warning("⚠️ gesture_detection_logging service not found")
+
+# ============================================================================
+# BACKGROUND TASKS
+# ============================================================================
+
+async def cleanup_old_logs():
+    """Background task to clean up logs older than 7 days"""
+    if not HAS_LOGGING_SERVICE:
+        logger.warning("Cleanup task skipped - logging service not available")
+        return
+        
+    while True:
+        try:
+            # Run cleanup every 24 hours
+            await asyncio.sleep(86400)
+            
+            logging_service = get_logging_service()
+            if logging_service:
+                deleted = logging_service.clear_old_logs(days=7)
+                logger.info(f"✅ Background cleanup: Deleted {deleted} logs older than 7 days")
+        except asyncio.CancelledError:
+            logger.info("Cleanup task cancelled")
+            break
+        except Exception as e:
+            logger.error(f"❌ Background cleanup error: {e}")
+            await asyncio.sleep(60)
+
+# ============================================================================
+# APP LIFECYCLE
+# ============================================================================
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifecycle events"""
     logger.info("🚀 Starting Gesture Recognition System...")
 
+    # Initialize database
     await init_db()
     logger.info("✅ Database initialized")
 
+    # Initialize default gestures
     async with async_session_maker() as session:
         await init_default_gestures(session)
 
+    # Initialize logging service
+    cleanup_task = None
+    if HAS_LOGGING_SERVICE:
+        try:
+            init_logging_service(database_url="sqlite:///./gesture_logs.db")
+            logger.info("✅ Gesture logging service initialized")
+            
+            # Start background cleanup task
+            cleanup_task = asyncio.create_task(cleanup_old_logs())
+            logger.info("✅ Background cleanup task started")
+        except Exception as e:
+            logger.error(f"❌ Error initializing logging service: {e}")
+
+    # Auto-start camera
     try:
         cams = camera_manager.detect_usb_cameras()
         if cams:
@@ -38,9 +99,23 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    # Cleanup
     camera_manager.cleanup()
     logger.info("📷 Camera manager cleaned up")
+    
+    if cleanup_task:
+        try:
+            cleanup_task.cancel()
+            await cleanup_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("✅ Cleanup task cancelled")
+    
     logger.info("👋 Shutting down Gesture Recognition System...")
+
+# ============================================================================
+# APP SETUP
+# ============================================================================
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -49,6 +124,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -66,6 +142,10 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
+# ============================================================================
+# ENDPOINTS
+# ============================================================================
+
 @app.get("/")
 async def root():
     """Root endpoint"""
@@ -80,16 +160,32 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
-    return {
-        "status": "healthy",
-        "service": settings.PROJECT_NAME,
-        "version": settings.VERSION,
-        "checks": {
-            "api": "ok",
-            "database": "ok",
-            "ml_model": "not_loaded"
+    try:
+        gesture_logs_count = 0
+        if HAS_LOGGING_SERVICE:
+            logging_service = get_logging_service()
+            if logging_service:
+                stats = logging_service.get_statistics()
+                gesture_logs_count = stats.get("total", 0)
+        
+        return {
+            "status": "healthy",
+            "service": settings.PROJECT_NAME,
+            "version": settings.VERSION,
+            "timestamp": datetime.utcnow().isoformat(),
+            "gesture_logs_count": gesture_logs_count,
+            "checks": {
+                "api": "ok",
+                "database": "ok",
+                "ml_model": "not_loaded"
+            }
         }
-    }
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return {
+            "status": "unhealthy",
+            "error": str(e)
+        }
 
 @app.get("/info")
 async def system_info():
@@ -102,6 +198,10 @@ async def system_info():
         "default_fps": settings.DEFAULT_FPS,
         "min_confidence": settings.MIN_DETECTION_CONFIDENCE
     }
+
+# ============================================================================
+# INCLUDE ROUTERS
+# ============================================================================
 
 try:
     from app.api.routes import cameras
@@ -124,9 +224,17 @@ try:
 except Exception as e:
     logger.error(f"❌ Error including training router: {e}")
 
+# NEW: Include gesture logs router
+if HAS_LOGGING_SERVICE:
+    try:
+        from app.api.routes import gesture_logs
+        app.include_router(gesture_logs.router, prefix=settings.API_PREFIX)
+        logger.info("✅ Gesture logs router included")
+    except Exception as e:
+        logger.error(f"❌ Error including gesture logs router: {e}")
+
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",
