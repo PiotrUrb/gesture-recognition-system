@@ -38,28 +38,55 @@ const Training = () => {
   const [selectedGestureId, setSelectedGestureId] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('overview');
   const [showAddModal, setShowAddModal] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const loadAttempted = useRef(false);
 
   // Derived state
   const selectedGesture = gestures.find(g => g.id === selectedGestureId);
 
-  // Mock Data Load - zdefiniowane przed useEffect
-  const fetchGestures = useCallback(async () => {
-    setLoading(true);
-    try {
-      setTimeout(() => {
+  // Load gestures - tylko raz przy mount
+  useEffect(() => {
+    if (loadAttempted.current) return; // Prevent double load
+    loadAttempted.current = true;
+
+    const loadGestures = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // Próba załadowania z API
+        try {
+          const response = await fetch('/api/v1/training/gestures', {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            setGestures(Array.isArray(data) ? data : data.gestures || []);
+            setLoading(false);
+            return;
+          }
+        } catch (apiError) {
+          console.warn('API unavailable, using demo data:', apiError);
+        }
+        
+        // Fallback na demo data
+        await new Promise(resolve => setTimeout(resolve, 300));
         setGestures(getDemoGestures());
         setLoading(false);
-      }, 500);
-    } catch (e) {
-      console.error(e);
-      setLoading(false);
-    }
-  }, []);
+        
+      } catch (err) {
+        console.error('Error loading gestures:', err);
+        setError('Failed to load gestures. Using demo data.');
+        setGestures(getDemoGestures());
+        setLoading(false);
+      }
+    };
 
-  useEffect(() => {
-    fetchGestures();
-  }, [fetchGestures]);
+    loadGestures();
+  }, []);
 
   // Handlers
   const handleSelectGesture = (id: number | null) => {
@@ -99,6 +126,14 @@ const Training = () => {
           </button>
         </div>
 
+        {/* Error Alert */}
+        {error && (
+          <div className="p-3 bg-yellow-900/20 border-b border-yellow-700/30 text-yellow-600 text-xs flex items-center gap-2">
+            <AlertCircle size={14} className="flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
         {/* Lista */}
         <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar min-h-0">
           
@@ -124,23 +159,34 @@ const Training = () => {
 
           <div className="h-px bg-gray-700 my-2 mx-2" />
 
-          {/* Lista Gestów */}
-          {gestures.map((gesture) => (
-            <GestureListItem 
-              key={gesture.id} 
-              gesture={gesture} 
-              isSelected={selectedGestureId === gesture.id}
-              onClick={() => handleSelectGesture(gesture.id)}
-            />
-          ))}
+          {/* Lista Gestów - Loading State */}
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader className="animate-spin text-accent-blue" size={24} />
+            </div>
+          ) : gestures.length === 0 ? (
+            <div className="flex items-center justify-center py-8 text-gray-500 text-xs text-center">
+              <p>No gestures yet. Click + to add one.</p>
+            </div>
+          ) : (
+            gestures.map((gesture) => (
+              <GestureListItem 
+                key={gesture.id} 
+                gesture={gesture} 
+                isSelected={selectedGestureId === gesture.id}
+                onClick={() => handleSelectGesture(gesture.id)}
+              />
+            ))
+          )}
         </div>
       </div>
 
       {/* --- PRAWY PANEL (GŁÓWNY OBSZAR) --- */}
       <div className="flex-1 bg-industrial-gray rounded-xl border border-gray-700 flex flex-col shadow-lg min-w-0 overflow-hidden h-auto lg:h-full max-h-[65vh] lg:max-h-full">
         {loading ? (
-          <div className="flex-1 flex items-center justify-center">
+          <div className="flex-1 flex items-center justify-center flex-col gap-4">
             <Loader className="animate-spin text-accent-blue" size={48} />
+            <p className="text-gray-400 text-sm">Loading Training Dashboard...</p>
           </div>
         ) : selectedGestureId === null ? (
           <GlobalSystemView gestures={gestures} />
@@ -156,7 +202,10 @@ const Training = () => {
       </div>
 
       {/* Modal Dodawania */}
-      {showAddModal && <AddGestureModal onClose={() => setShowAddModal(false)} onAdded={fetchGestures} />}
+      {showAddModal && <AddGestureModal onClose={() => setShowAddModal(false)} onAdded={() => {
+        // Reload gestures after adding new one
+        loadAttempted.current = false; // Allow reload
+      }} />}
     </div>
   );
 };
@@ -171,8 +220,15 @@ const GlobalSystemView = ({ gestures }: { gestures: Gesture[] }) => {
     const formData = new FormData();
     formData.append('model_file', file);
     try {
-      // await api.post('/api/v1/models/import', formData);
-      alert('Model imported successfully!');
+      const response = await fetch('/api/v1/models/import', {
+        method: 'POST',
+        body: formData
+      });
+      if (response.ok) {
+        alert('Model imported successfully!');
+      } else {
+        alert('Failed to import model');
+      }
     } catch {
       alert('Failed to import model');
     }
@@ -180,8 +236,7 @@ const GlobalSystemView = ({ gestures }: { gestures: Gesture[] }) => {
 
   const handleExportModel = async () => {
     try {
-      // window.open('/api/v1/models/export', '_blank');
-      alert('Model export started...');
+      window.open('/api/v1/models/export', '_blank');
     } catch {
       alert('Failed to export model');
     }
@@ -441,8 +496,15 @@ const FileImportButton = ({ gesture }: { gesture: Gesture }) => {
     });
 
     try {
-      // await api.post(`/api/v1/gestures/${gesture.id}/import`, formData);
-      alert(`Imported ${e.target.files.length} files for ${gesture.name}`);
+      const response = await fetch(`/api/v1/gestures/${gesture.id}/import`, {
+        method: 'POST',
+        body: formData
+      });
+      if (response.ok) {
+        alert(`Imported ${e.target.files.length} files for ${gesture.name}`);
+      } else {
+        alert('Failed to import files');
+      }
     } catch {
       alert('Failed to import files');
     }
@@ -510,7 +572,10 @@ const CollectionMode = ({ gesture, onBack }: any) => {
 
       {/* Camera Feed */}
       <div className="w-full max-w-3xl h-80 bg-black rounded-xl border border-gray-700 relative overflow-hidden flex items-center justify-center mb-4">
-        <img src="http://localhost:8000/api/v1/cameras/0/stream" className="w-full h-full object-cover opacity-80" alt="Camera" />
+        <div className="text-gray-600 text-center">
+          <Camera size={48} className="mx-auto mb-3 opacity-30" />
+          <p className="text-sm">Camera stream unavailable</p>
+        </div>
         
         {/* Overlay */}
         <div className={`absolute inset-0 pointer-events-none flex flex-col justify-between p-4 lg:p-6 border-4 transition-colors ${
