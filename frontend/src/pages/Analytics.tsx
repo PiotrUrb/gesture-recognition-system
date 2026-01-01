@@ -55,13 +55,6 @@ const Analytics = () => {
   const [isClearing, setIsClearing] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const [showFilters, setShowFilters] = useState(false);
-  const [filters, setFilters] = useState({
-    search: '',
-    gesture: '',
-    camera: ''
-  });
-
   /* ===================== DATA ===================== */
 
   const fetchLogs = async (newOffset = offset) => {

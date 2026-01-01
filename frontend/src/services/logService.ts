@@ -34,10 +34,6 @@ interface LogsResponse {
   offset: number;
 }
 
-interface StatsResponse {
-  stats: Stats;
-}
-
 class LogService {
   async getRecentLogs(limit: number = 50): Promise<GestureLog[]> {
     try {

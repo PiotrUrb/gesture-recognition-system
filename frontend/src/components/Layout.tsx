@@ -3,8 +3,7 @@
 import { useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
-  LayoutDashboard, Camera, Activity, Settings, Hand
-} from 'lucide-react';
+  LayoutDashboard, Camera, Activity, Hand} from 'lucide-react';
 import SystemStatus from './SystemStatus';
 
 const TopBar = () => {
@@ -15,7 +14,6 @@ const TopBar = () => {
     { path: '/live', icon: Camera, label: 'Live View' },
     { path: '/training', icon: Hand, label: 'Training' },
     { path: '/analytics', icon: Activity, label: 'Logs' },
-    { path: '/settings', icon: Settings, label: 'Settings' },
   ];
 
   const handleStatusChange = useCallback((status: string) => {
