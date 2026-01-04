@@ -1,24 +1,22 @@
-# Gesture Recognition System 🤖✋
+# Gesture Recognition System
 
 System rozpoznawania gestów z wykorzystaniem uczenia maszynowego w przemyśle.
 
-## 📋 Opis
+## Opis
 
 Przemysłowy system do rozpoznawania gestów rąk/dłoni na żywo z kamer przemysłowych, 
 z możliwością trenowania własnych gestów i kontroli maszyn.
 
-## 🎯 Funkcjonalności
+## Funkcjonalności
 
-- ✅ Real-time wykrywanie gestów (MediaPipe)
-- ✅ 12 gestów domyślnych (8 statycznych + 4 dynamiczne)
-- ✅ Trening własnych gestów
-- ✅ Wiele algorytmów ML (Random Forest, SVM, Neural Network, LSTM...)
-- ✅ Multi-camera support (do 9 kamer)
-- ✅ Multi-user tracking
-- ✅ Emergency system (X Sign)
-- ✅ Interfejs webowy (React + TypeScript)
+- Real-time wykrywanie gestów (MediaPipe)
+- 12 gestów domyślnych (8 statycznych)
+- Trening własnych gestów
+- Multi-camera support (do 9 kamer)
+- Multi-user tracking
+- Interfejs webowy (React + TypeScript)
 
-## 🛠️ Stack Technologiczny
+## Stack Technologiczny
 
 **Backend:**
 - Python 3.10+
@@ -34,7 +32,7 @@ z możliwością trenowania własnych gestów i kontroli maszyn.
 - Vite
 - TailwindCSS
 
-## 📂 Struktura Projektu
+## Struktura Projektu
 
 gesture-recognition-system/
 ├── backend/ # Python FastAPI backend
@@ -43,7 +41,7 @@ gesture-recognition-system/
 └── docs/ # Documentation
 
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Backend
 
@@ -59,17 +57,6 @@ uvicorn app.main:app --reload
 cd frontend
 npm install
 npm run dev
-
-
-## 👨‍💻 Autor
-
-[Twoje Imię Nazwisko]  
-Praca Inżynierska 2025/2026
-
-## 📅 Timeline
-
-- 23.11.2025 - 31.12.2025: Część praktyczna (program)
-- 02.01.2026 - 31.01.2026: Część teoretyczna (praca pisemna)
 
 ## 📄 Licencja
 
