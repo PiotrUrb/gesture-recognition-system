@@ -77,17 +77,13 @@ class CameraManager:
                 logger.error(f"Failed to open camera {camera_id}")
                 return False
             
-            # OPTYMALIZACJA: Ustaw rozdzielczość na 640x480
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
             
-            # OPTYMALIZACJA: Ustaw FPS na 30
             cap.set(cv2.CAP_PROP_FPS, 30)
             
-            # OPTYMALIZACJA: Wyłącz auto-focus (jeśli wspierane)
             cap.set(cv2.CAP_PROP_AUTOFOCUS, 0)
             
-            # OPTYMALIZACJA: Ustaw buffer na 1 (najnowszy frame)
             cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             
             # Get actual properties

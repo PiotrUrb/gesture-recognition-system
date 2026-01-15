@@ -1,5 +1,3 @@
-# backend/app/services/feature_processor.py
-
 """
 Feature Processor
 Converts hand landmarks to ML features

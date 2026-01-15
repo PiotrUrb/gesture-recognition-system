@@ -12,10 +12,14 @@ import {
   AlertTriangle,
   Eye,
   Hash,
+  Cpu,
+  Zap,
 } from 'lucide-react';
 import api from '../services/api';
 
+
 // --- GESTURES CONFIG ---
+
 
 const STATIC_GESTURES = [
   'fist',
@@ -28,6 +32,7 @@ const STATIC_GESTURES = [
   'ok_sign',
 ] as const;
 
+
 const GESTURE_ICONS: Record<string, string> = {
   fist: '✊',
   open_hand: '✋',
@@ -38,6 +43,7 @@ const GESTURE_ICONS: Record<string, string> = {
   four_fingers: '4',
   five_fingers: '5',
 };
+
 
 const GESTURE_COLORS: Record<
   string,
@@ -81,10 +87,13 @@ const GESTURE_COLORS: Record<
   },
 };
 
+
 // --- CAMERA WIDGET ---
+
 
 const CameraGridWidget = ({ onMaximize }: { onMaximize: () => void }) => {
   const navigate = useNavigate();
+
 
   return (
     <div className="bg-black rounded-xl border border-gray-700 overflow-hidden relative h-full min-h-[400px] flex flex-col group shadow-lg shadow-black/50">
@@ -106,6 +115,7 @@ const CameraGridWidget = ({ onMaximize }: { onMaximize: () => void }) => {
         </button>
       </div>
 
+
       {/* Obraz */}
       <div className="flex-1 bg-gray-900 relative flex items-center justify-center overflow-hidden">
         <img
@@ -114,6 +124,7 @@ const CameraGridWidget = ({ onMaximize }: { onMaximize: () => void }) => {
           alt="Live Stream"
         />
       </div>
+
 
       {/* Pasek dolny */}
       <div className="bg-gray-900/95 border-t border-gray-800 p-2 flex justify-between items-center shrink-0 h-8">
@@ -132,7 +143,9 @@ const CameraGridWidget = ({ onMaximize }: { onMaximize: () => void }) => {
   );
 };
 
+
 // --- ACTIVE GESTURES ---
+
 
 const GesturesWidget = () => {
   const navigate = useNavigate();
@@ -141,6 +154,7 @@ const GesturesWidget = () => {
     null,
   );
   const [detectionTime, setDetectionTime] = useState<Date | null>(null);
+
 
   useEffect(() => {
     const fetchGestures = async () => {
@@ -161,6 +175,7 @@ const GesturesWidget = () => {
       }
     };
 
+
     const pollRecentGesture = async () => {
       try {
         const res = await api.get('/api/v1/gesture-logs/recent?limit=1');
@@ -174,11 +189,13 @@ const GesturesWidget = () => {
       }
     };
 
+
     fetchGestures();
     pollRecentGesture();
     const interval = setInterval(pollRecentGesture, 500);
     return () => clearInterval(interval);
   }, []);
+
 
   return (
     <div className="bg-industrial-gray p-4 rounded-xl border border-gray-700 h-full flex flex-col shadow-lg min-h-[300px]">
@@ -187,6 +204,7 @@ const GesturesWidget = () => {
           <Hand className="text-yellow-500" size={18} /> Active Gestures
         </h3>
       </div>
+
 
       {/* Aktualnie wykryty gest */}
       {lastDetectedGesture && (
@@ -210,11 +228,13 @@ const GesturesWidget = () => {
         </div>
       )}
 
+
       {/* Lista gestów */}
       <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar min-h-0">
         {allGestures.map((g) => {
           const colors = GESTURE_COLORS[g.name] || GESTURE_COLORS.fist;
           const isDetected = lastDetectedGesture === g.name;
+
 
           return (
             <div
@@ -252,6 +272,7 @@ const GesturesWidget = () => {
         })}
       </div>
 
+
       {/* Start Training */}
       <button
         onClick={() => navigate('/training')}
@@ -263,116 +284,192 @@ const GesturesWidget = () => {
   );
 };
 
+
 // --- SYSTEM INFO ---
 
+
 const ParametersWidget = () => {
-  const [systemInfo, setSystemInfo] = useState<{
+  const [config, setConfig] = useState<{
+    connected_cameras: number;
+    algorithm: string;
+    confidence_threshold: number;
+    model_version: string;
     max_cameras: number;
-    version: string;
-  }>({
-    max_cameras: 1,
-    version: 'v1.0.0',
-  });
-  const [stats, setStats] = useState<any>(null);
+  } | null>(null);
+
+
+  const [stats, setStats] = useState<{
+    total_detections: number;
+    average_confidence: number;
+  } | null>(null);
+
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // podstawowe info – /health lub /info
-        try {
-          const res = await api.get('/health');
-          if (res.data) {
-            setSystemInfo({
-              max_cameras: res.data.max_cameras ?? 1,
-              version: res.data.version ?? 'v1.0.0',
-            });
-          }
-        } catch {
-          try {
-            const res = await api.get('/info');
-            if (res.data) {
-              setSystemInfo({
-                max_cameras: res.data.max_cameras ?? 1,
-                version: res.data.version ?? 'v1.0.0',
-              });
-            }
-          } catch {
-            // zostaw domyślne
-          }
+        setLoading(true);
+        setError(null);
+
+
+        // Pobierz config
+        console.log('Fetching system config...');
+        const configRes = await api.get('/api/v1/system/config');
+        console.log('Config response:', configRes.data);
+        
+        if (configRes.data?.config) {
+          setConfig(configRes.data.config);
         }
 
-        // statystyki gestów
-        try {
-          const res = await api.get('/api/v1/gesture-logs/stats');
-          if (res.data?.stats) setStats(res.data.stats);
-        } catch {
-          /* optional */
+
+        // Pobierz statystyki gestów
+        console.log('Fetching gesture stats...');
+        const statsRes = await api.get('/api/v1/gesture-logs/stats');
+        console.log('Stats response:', statsRes.data);
+        
+        if (statsRes.data?.stats) {
+          setStats({
+            total_detections: statsRes.data.stats.total ?? 0,
+            average_confidence: statsRes.data.stats.avg_confidence ?? 0,
+          });
         }
-      } catch {
-        /* ignore */
+      } catch (error) {
+        console.error('Error fetching system data:', error);
+        setError('Failed to load system info');
+      } finally {
+        setLoading(false);
       }
     };
 
+
     fetchData();
-    const interval = setInterval(fetchData, 5000);
+    const interval = setInterval(fetchData, 2000);
     return () => clearInterval(interval);
   }, []);
 
-  const avg = stats?.average_confidence
-    ? (stats.average_confidence * 100).toFixed(1)
-    : '75.0';
+
+  if (loading && !config) {
+    return (
+      <div className="bg-industrial-gray p-4 rounded-xl border border-gray-700 h-full min-h-[320px] flex items-center justify-center shadow-lg">
+        <span className="text-gray-400 text-sm">Loading system info...</span>
+      </div>
+    );
+  }
+
+
+  if (error && !config) {
+    return (
+      <div className="bg-industrial-gray p-4 rounded-xl border border-gray-700 h-full min-h-[320px] flex flex-col items-center justify-center shadow-lg">
+        <AlertTriangle className="text-red-400 mb-2" size={24} />
+        <span className="text-red-400 text-sm">{error}</span>
+      </div>
+    );
+  }
+
+
+  const totalDetections = stats?.total_detections ?? 0;
+  const avgConfidence =
+    stats && typeof stats.average_confidence === 'number' && stats.average_confidence > 0
+      ? (stats.average_confidence * 100).toFixed(1)
+      : stats?.total_detections ? '0.0' : '—';
+
+
+  const connectedCameras = config?.connected_cameras ?? 0;
+  const confidenceThreshold = config?.confidence_threshold ?? 70;
+  const algorithm = config?.algorithm ?? 'RandomForest';
+  const modelVersion = config?.model_version ?? 'v1.0.0';
+
 
   return (
-    <div className="bg-industrial-gray p-4 rounded-xl border border-gray-700 h-full min-h-[250px] flex flex-col shadow-lg">
+    <div className="bg-industrial-gray p-4 rounded-xl border border-gray-700 h-full min-h-[320px] flex flex-col shadow-lg">
       <div className="flex justify-between items-center mb-4 shrink-0">
         <h3 className="font-bold text-white flex items-center gap-2 text-sm">
           <Sliders className="text-blue-400" size={18} /> System Info
         </h3>
       </div>
 
+
       <div className="space-y-4 flex-1 overflow-y-auto custom-scrollbar">
+        {/* Row 1: Connected Cameras & Total Detections */}
         <div className="grid grid-cols-2 gap-3">
-          <div className="bg-black/20 p-3 rounded border border-gray-700 flex flex-col items-center justify-center text-center">
-            <Eye className="text-gray-500 mb-1" size={16} />
+          <div className="bg-black/20 p-3 rounded border border-gray-700 flex flex-col items-center justify-center text-center hover:border-blue-500/30 transition-colors">
+            <Eye className="text-blue-400 mb-2" size={18} />
             <span className="text-2xl font-bold text-white">
-              {systemInfo.max_cameras}
+              {connectedCameras}
             </span>
-            <span className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">
-              Cameras
+            <span className="text-[10px] text-gray-500 uppercase tracking-wider font-bold mt-1">
+              Connected Cameras
             </span>
           </div>
 
-          <div className="bg-black/20 p-3 rounded border border-gray-700 flex flex-col items-center justify-center text-center">
-            <Hash className="text-gray-500 mb-1" size={16} />
-            <span className="text-2xl font-bold text-white">
-              {stats?.total_detections ?? 0}
-            </span>
-            <span className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">
-              Detections
-            </span>
-          </div>
 
-          <div className="bg-black/20 p-3 rounded border border-gray-700 flex flex-col items-center justify-center text-center col-span-2">
-            <AlertTriangle className="text-gray-500 mb-1" size={16} />
-            <span className="text-xs text-gray-400 mb-1">Model accuracy</span>
-            <span className="text-lg font-bold text-emerald-400">{avg}%</span>
+          <div className="bg-black/20 p-3 rounded border border-gray-700 flex flex-col items-center justify-center text-center hover:border-cyan-500/30 transition-colors">
+            <Hash className="text-cyan-400 mb-2" size={18} />
+            <span className="text-2xl font-bold text-white">
+              {totalDetections.toLocaleString()}
+            </span>
+            <span className="text-[10px] text-gray-500 uppercase tracking-wider font-bold mt-1">
+              Total Detections
+            </span>
           </div>
         </div>
 
-        <div className="border-t border-gray-700/50 pt-3 grid grid-cols-2 gap-2">
-          <div className="bg-black/20 p-2 rounded border border-gray-700">
-            <span className="text-[9px] text-gray-500 block uppercase font-bold tracking-wide">
-              Algorithm
+
+        {/* Row 2: Confidence Threshold & Avg Confidence */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-black/20 p-3 rounded border border-gray-700 flex flex-col items-center justify-center text-center hover:border-yellow-500/30 transition-colors">
+            <Zap className="text-yellow-400 mb-2" size={18} />
+            <span className="text-2xl font-bold text-white">
+              {confidenceThreshold}%
             </span>
-            <span className="text-xs font-mono text-gray-300">RandomForest</span>
+            <span className="text-[10px] text-gray-500 uppercase tracking-wider font-bold mt-1">
+              Sensitivity Threshold
+            </span>
           </div>
-          <div className="bg-black/20 p-2 rounded border border-gray-700">
-            <span className="text-[9px] text-gray-500 block uppercase font-bold tracking-wide">
-              Model Ver.
+
+
+          <div className="bg-black/20 p-3 rounded border border-gray-700 flex flex-col items-center justify-center text-center hover:border-green-500/30 transition-colors">
+            <AlertTriangle className="text-green-400 mb-2" size={18} />
+            <span className="text-2xl font-bold text-white">
+              {avgConfidence}%
             </span>
-            <span className="text-xs font-mono text-gray-300">
-              {systemInfo.version}
+            <span className="text-[10px] text-gray-500 uppercase tracking-wider font-bold mt-1">
+              Avg Confidence
             </span>
+          </div>
+        </div>
+
+
+        {/* Row 3: Algorithm & Model Version */}
+        <div className="border-t border-gray-700/50 pt-4 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-black/20 p-3 rounded border border-gray-700 hover:border-purple-500/30 transition-colors">
+              <div className="flex items-center gap-2 mb-2">
+                <Cpu className="text-purple-400" size={14} />
+                <span className="text-[9px] text-gray-500 uppercase font-bold tracking-wide">
+                  Algorithm
+                </span>
+              </div>
+              <span className="text-sm font-mono text-gray-300 font-bold">
+                {algorithm}
+              </span>
+            </div>
+
+
+            <div className="bg-black/20 p-3 rounded border border-gray-700 hover:border-orange-500/30 transition-colors">
+              <div className="flex items-center gap-2 mb-2">
+                <AlertTriangle className="text-orange-400" size={14} />
+                <span className="text-[9px] text-gray-500 uppercase font-bold tracking-wide">
+                  Model Ver.
+                </span>
+              </div>
+              <span className="text-sm font-mono text-gray-300 font-bold">
+                {modelVersion}
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -380,11 +477,15 @@ const ParametersWidget = () => {
   );
 };
 
+
+
 // --- LOGS ---
+
 
 const LogsWidget = () => {
   const navigate = useNavigate();
   const [logs, setLogs] = useState<any[]>([]);
+
 
   useEffect(() => {
     const fetchLogs = async () => {
@@ -396,10 +497,12 @@ const LogsWidget = () => {
       }
     };
 
+
     const interval = setInterval(fetchLogs, 2000);
     fetchLogs();
     return () => clearInterval(interval);
   }, []);
+
 
   return (
     <div className="bg-industrial-gray rounded-xl border border-gray-700 h-full overflow-hidden flex flex-col shadow-lg min-h-[200px]">
@@ -430,10 +533,7 @@ const LogsWidget = () => {
           <tbody className="text-gray-400 divide-y divide-gray-800/50">
             {logs.length === 0 ? (
               <tr>
-                <td
-                  colSpan={4}
-                  className="py-8 text-center opacity-50 italic"
-                >
+                <td colSpan={4} className="py-8 text-center opacity-50 italic">
                   Waiting for events...
                 </td>
               </tr>
@@ -471,7 +571,9 @@ const LogsWidget = () => {
   );
 };
 
+
 // --- FULLSCREEN MODAL ---
+
 
 const FullScreenCameraModal = ({
   isOpen,
@@ -483,6 +585,7 @@ const FullScreenCameraModal = ({
   useEffect(() => {
     if (!isOpen) return;
 
+
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
@@ -490,7 +593,9 @@ const FullScreenCameraModal = ({
     return () => window.removeEventListener('keydown', handleEsc);
   }, [isOpen, onClose]);
 
+
   if (!isOpen) return null;
+
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-sm flex items-center justify-center p-6 animate-fade-in">
@@ -516,10 +621,13 @@ const FullScreenCameraModal = ({
   );
 };
 
+
 // --- MAIN DASHBOARD ---
+
 
 const Dashboard = () => {
   const [isCameraExpanded, setIsCameraExpanded] = useState(false);
+
 
   return (
     <>
@@ -532,6 +640,7 @@ const Dashboard = () => {
             <LogsWidget />
           </div>
         </div>
+
 
         <div className="col-span-12 lg:col-span-3 flex flex-col gap-6">
           <div className="h-[500px]">
@@ -549,5 +658,6 @@ const Dashboard = () => {
     </>
   );
 };
+
 
 export default Dashboard;

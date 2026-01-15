@@ -1,5 +1,3 @@
-# backend/app/services/gesture_controller.py
-
 """
 Gesture Controller
 Manages detection modes, executes actions, and detects dynamic gestures (swipes)
@@ -131,7 +129,6 @@ class GestureController:
             "message": ""
         }
 
-        # --- 1. ANALIZA DYNAMICZNA (RUCH) ---
         if landmarks:
             self.movement_analyzer.add_position(landmarks)
             dynamic_gesture = self.movement_analyzer.analyze_movement()
@@ -142,7 +139,6 @@ class GestureController:
                 self.log_action(dynamic_gesture, 1.0)
                 return result
 
-        # --- 2. ANALIZA STATYCZNA (BEZ ZMIAN) ---
         if confidence < 0.7:
             self.reset_state()
             return result

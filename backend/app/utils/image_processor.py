@@ -1,9 +1,3 @@
-#   backend/app/utils/image_processor.py
-
-"""
-Universal Image Processor - Dopasowany do Twoich struktur
-Processes any gesture images to landmarks and features
-"""
 import cv2
 import numpy as np
 from pathlib import Path
@@ -20,10 +14,6 @@ from app.services.feature_processor import feature_processor
 logger = logging.getLogger(__name__)
 
 class ImageProcessor:
-    """
-    Processes gesture images to extract features
-    Works with any image dataset structure
-    """
     
     # Gesture mappings for different datasets
     GESTURE_MAPPINGS = {
@@ -52,9 +42,8 @@ class ImageProcessor:
             '0': 'zero'
         },
         'asl': {
-            # Używamy tylko wybrane litery podobne do gestów
-            'A': 'fist',  # A to zamknięta pięść
-            'B': 'four_fingers',  # B to 4 palce
+            'A': 'fist',
+            'B': 'four_fingers',
             'C': 'c_shape',
             'O': 'ok_sign',
             'nothing': 'no_gesture'

@@ -1,5 +1,3 @@
-# backend/app/api/dependencies.py
-
 """
 API dependencies
 """

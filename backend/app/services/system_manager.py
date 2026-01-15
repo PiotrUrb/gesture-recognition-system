@@ -1,9 +1,3 @@
-# backend/app/services/system_manager.py
-"""
-System Manager Service
-Handles shutdown, restart, and status monitoring
-"""
-
 import psutil
 import logging
 import asyncio

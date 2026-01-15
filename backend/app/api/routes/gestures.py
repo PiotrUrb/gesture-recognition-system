@@ -1,5 +1,3 @@
-# backend/app/api/routes/gestures.py
-
 """
 Gesture management routes
 """

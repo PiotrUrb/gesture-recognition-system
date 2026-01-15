@@ -1,5 +1,3 @@
-# backend/app/utils/data_collector.py
-
 """
 Data Collector - Collect training data from camera
 """
@@ -35,18 +33,6 @@ class DataCollector:
         camera_manager=None,
         hand_detector=None
     ) -> dict:
-        """
-        Collect training data for a gesture
-        
-        Args:
-            gesture_name: Name of gesture to collect
-            num_samples: Number of samples to collect
-            camera_manager: CameraManager instance
-            hand_detector: HandDetector instance
-            
-        Returns:
-            Dict with collection statistics
-        """
         gesture_dir = self.output_dir / gesture_name
         gesture_dir.mkdir(exist_ok=True)
         

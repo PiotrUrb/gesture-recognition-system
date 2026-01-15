@@ -13,7 +13,6 @@ export interface TrainingMetrics {
   precision?: number;
   recall?: number;
   f1_score?: number;
-  // możesz dodać inne pola jeśli backend je zwraca
 }
 
 export interface TrainingStateDto {

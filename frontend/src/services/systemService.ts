@@ -1,9 +1,3 @@
-// frontend/src/services/systemService.ts
-/**
- * System Management Service - Simplified
- * Używa root endpoint /health zamiast komplikowanego /api/v1/system/health
- */
-
 const API_BASE_URL = 'http://localhost:8000';
 
 export interface SystemStatus {

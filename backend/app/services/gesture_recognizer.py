@@ -1,5 +1,5 @@
 """
-Gesture Recognizer Service - POPRAWIONA WERSJA
+Gesture Recognizer Service
 Loads trained model and performs inference
 """
 import joblib
@@ -15,9 +15,7 @@ class GestureRecognizer:
         self.model = None
         self.label_encoder = None
         
-        # ✅ POPRAWIONA ŚCIEŻKA - ZAWSZE SZUKA W backend/models
         if model_dir is None:
-            # Znajdź backend folder relatywnie do tego pliku
             current_file = os.path.abspath(__file__)  # /backend/app/services/gesture_recognizer.py
             services_dir = os.path.dirname(current_file)  # /backend/app/services
             app_dir = os.path.dirname(services_dir)  # /backend/app
@@ -33,7 +31,6 @@ class GestureRecognizer:
             model_path = self.model_dir / 'gesture_model.pkl'
             encoder_path = self.model_dir / 'label_encoder.pkl'
             
-            # ✅ DODANE LOGOWANIE
             logger.info(f"🔍 Looking for model at: {model_path.absolute()}")
             
             if not model_path.exists():
@@ -63,7 +60,6 @@ class GestureRecognizer:
             return "Model Not Loaded", 0.0
 
         try:
-            # ✅ DODANE SPRAWDZENIE FORMATU
             if not isinstance(features, np.ndarray):
                 logger.error(f"❌ Features must be numpy array, got {type(features)}")
                 return "Invalid Input", 0.0
@@ -76,7 +72,6 @@ class GestureRecognizer:
             if features.ndim == 1:
                 features = features.reshape(1, -1)
             
-            # ✅ DODANE LOGOWANIE
             logger.debug(f"Predicting with features shape: {features.shape}")
             
             # Predict
@@ -87,7 +82,6 @@ class GestureRecognizer:
             label = self.label_encoder.inverse_transform([prediction_idx])[0]
             confidence = float(probabilities[prediction_idx])
             
-            # ✅ DODANE LOGOWANIE WYNIKU
             logger.debug(f"🎯 Predicted: {label} (confidence: {confidence:.2f})")
             
             return label, confidence

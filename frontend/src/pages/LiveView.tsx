@@ -221,7 +221,7 @@ const CameraFeed = ({ camera, isSelected, onClick, onFullscreen }: any) => {
         isSelected ? 'border-accent-blue shadow-lg shadow-blue-900/50' : 'border-gray-700 hover:border-gray-600'
       }`}
     >
-      {/* Overlay Header - UJEDNOLICONY */}
+      {/* Overlay Header */}
       <div className="absolute top-0 left-0 w-full p-3 bg-gradient-to-b from-black/90 to-transparent z-10 flex justify-between items-start opacity-0 group-hover:opacity-100 transition-opacity duration-300">
         <div className="flex items-center gap-2">
           <span className="bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded animate-pulse">LIVE</span>
@@ -264,7 +264,7 @@ const CameraFeed = ({ camera, isSelected, onClick, onFullscreen }: any) => {
   );
 };
 
-// Modal pełnoekranowy - UJEDNOLICONY z Dashboard
+// Modal pełnoekranowy
 const FullscreenCameraModal = ({ camera, onClose }: { camera: any, onClose: () => void }) => {
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {

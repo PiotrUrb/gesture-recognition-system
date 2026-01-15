@@ -1,5 +1,3 @@
-# backend/app/models/gesture.py
-
 """
 Gesture database model
 """

@@ -1,4 +1,3 @@
-// frontend/src/components/Layout.tsx
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';

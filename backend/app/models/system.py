@@ -1,4 +1,3 @@
-# backend/app/models/system.py
 """
 System Status Model
 """

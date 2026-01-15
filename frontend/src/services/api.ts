@@ -1,6 +1,5 @@
 import axios from 'axios';
 
-// Adres Twojego backendu (FastAPI)
 const API_URL = 'http://localhost:8000';
 
 const api = axios.create({
@@ -10,15 +9,12 @@ const api = axios.create({
   },
 });
 
-// Funkcje do pobierania danych
 export const systemService = {
-  // Sprawdza czy backend żyje
   getHealth: async () => {
     const response = await api.get('/health');
     return response.data;
   },
   
-  // Pobiera informacje o systemie
   getInfo: async () => {
     const response = await api.get('/info');
     return response.data;

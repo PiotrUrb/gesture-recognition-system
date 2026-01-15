@@ -1,9 +1,3 @@
-# backend/app/utils/dataset_downloader.py
-
-"""
-HaGRID Dataset Downloader
-Downloads subset of HaGRID dataset for gesture recognition
-"""
 import requests
 import zipfile
 import os
@@ -14,11 +8,6 @@ from tqdm import tqdm
 logger = logging.getLogger(__name__)
 
 class HaGRIDDownloader:
-    """
-    Downloads and extracts HaGRID dataset
-    HaGRID: HAnd Gesture Recognition Image Dataset
-    Paper: https://arxiv.org/abs/2206.08219
-    """
     
     # Subset URLs (using sample version for quick start)
     DATASET_URLS = {

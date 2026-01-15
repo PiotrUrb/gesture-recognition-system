@@ -1,5 +1,3 @@
-# backend/app/models/log.py
-
 from sqlalchemy import Column, Integer, String, Float, DateTime
 from sqlalchemy.sql import func
 from app.core.database import Base

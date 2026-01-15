@@ -1,9 +1,3 @@
-// frontend/src/components/SystemStatus.tsx
-/**
- * System Status Component - Minimal & Clean
- * Wyświetla tylko status, autoreferesz co 3 sekundy
- */
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { systemService } from '../services/systemService';
 
